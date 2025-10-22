@@ -5,33 +5,32 @@ globals [
 
 breed [workers a-worker]
 breed [drones a-drone]
-breed [queens a-queen]
-breed [mites a-free-mite]
 
-
-queens-own [
-age
-]
 workers-own [
-age
-phoretic-mite
-food
-
+age ;; age of the bee
+phoretic-mite ;does the bee have a mite attached
+food ;;food level
+designation ;;hive bee or forager
+health ;; health of the bee
 ]
 drones-own [
 age
+health ;; health of the bee
 ]
 
 patches-own [
  growth-stage
  mite-count
- larvae
+ has-brood
  cell
  honey-level
-
-
+ food-level
+ larvae-health
 ]
 
+to set-globals
+  set spacer-size 4
+end
 
 to setup
   clear-all
@@ -40,47 +39,13 @@ to setup
 end
 
 to go
-
-  ask patches with [larvae = true][
-    set growth-stage growth-stage + 1
-
-    if growth-stage > 200[
-      set larvae false
-    ifelse random 20 = 1[
-  sprout-drones 100 [    set color green
-     set shape "bug"
-     set size 3
-    set age 0
-    setxy random-pxcor (min-pycor + bottom-board-size) + random (max-pycor - (min-pycor + bottom-board-size)+ 1)
-  ]
-      ][
-    sprout-workers num-workers [
-    set color green
-    set shape "bug"
-    set size 3
-    set age 0
-    setxy random-pxcor (min-pycor + bottom-board-size) + random (max-pycor - (min-pycor + bottom-board-size)+ 1) ; Place them randomly but above the bottom board
-  ]
-      ]
-    ]
-
-  ]
+  brood-development
 
   ask turtles [
    set age age + 1
 
   ]
 
-  ask turtles with [breed = queens][
-
-  if(random 500 = 5)[ ;;this probably needs to be replaced with the queen sensing the population density (consult literature)
-     lay-egg
-    ]
-
-   move-queen
-
-
-  ]
    ask turtles with [breed = workers][
 
     if [pcolor] of patch-here = blue[
@@ -89,7 +54,7 @@ to go
         move-queen
       ]
     ]
-
+   feed-larvae
    move-queen ;;create seperate movement routine
    if(age > 2000)[
    die
@@ -100,10 +65,68 @@ to go
   tick ;; advance the clock by one “tick”
 end
 
-to set-globals
-  set spacer-size 4
-end
 
+to brood-development
+ ask patches with [has-brood = true][
+    set pcolor scale-color yellow growth-stage 201 1
+    ;;This code is incomplete, growth needs to depend on worker involement
+
+    if(growth-stage < 90)[ ;;sort of random value right now, but this represents when the cell is capped and the brood grows on its own
+      if ticks mod 10 = 0[;;every 10 ticks otherwise the numbers get annoyingly big for everything
+        if food-level > 0[set food-level food-level - 1 ]
+      ]
+       if food-level <= 0[ ;;The larvae gets hurt if there is no more food
+         set larvae-health larvae-health - 1
+       ]
+    ]
+    set growth-stage growth-stage + 1
+
+    if larvae-health <= 0 [ ;;the larvae dies once their health hits zero
+      set pcolor yellow - 0.5
+      set growth-stage 0
+      set has-brood false
+    ]
+
+
+    if growth-stage > 200[
+      set pcolor yellow - 0.5
+      set growth-stage 0
+      set has-brood false
+      ifelse random 20 = 1[ ;;may need to add global variable to control drone %
+        sprout-drones 1 [
+        set color green
+        set shape "bug"
+        set size 3
+        set age 0
+        set health larvae-health
+        ]
+      ][
+    sprout-workers 1 [
+    set color green
+    set shape "bug"
+    set size 3
+    set age 0
+    set health larvae-health
+  ]
+      ]
+    ]
+  ]
+  if ticks mod egg-time = 0 [
+
+    if any? patches with [growth-stage > -1 and has-brood = false][
+    ask n-of 1 patches with [growth-stage > -1 and has-brood = false] [
+     set has-brood true
+     set growth-stage 1
+     set food-level 5
+     set larvae-health 100
+    ]
+    ]
+
+  ]
+
+
+
+end
 
 to generate-beehive
 
@@ -115,14 +138,18 @@ to generate-beehive
  resize-world x-min x-max y-min y-max
 
  ask patches [
-
-
-
+    set growth-stage -1
     if pycor > min-pycor + bottom-board-size [
-      set pcolor yellow
       set cell true
-      set larvae false
-      set growth-stage 0
+      set has-brood false
+      ifelse pycor < (min-pycor + bottom-board-size + deep-super-size)[
+        set growth-stage 0
+        set pcolor yellow - 0.5
+      ][
+        set pcolor yellow
+      ]
+
+
 
     ]
     if (pycor = (min-pycor + bottom-board-size))[
@@ -134,49 +161,31 @@ to generate-beehive
      set pcolor blue
     ]
 
-     if pycor = (min-pycor + bottom-board-size + deep-super-size) [
-      set pcolor magenta
-      set cell false
-    ]
 
   ]
-
     ;;setup bees
-     create-workers num-workers [  ; Creates 50 sheep
+     create-workers num-workers [
     set color green
     set shape "bug"
     set size 3
     set age 0
+    set food 20
+    set health 100
     if(random 10 = 1)[
-     set phoretic-mite true
+     set phoretic-mite true ;;infect some workers with mites from the start
     ]
 
     setxy random-pxcor (min-pycor + bottom-board-size) + random (max-pycor - (min-pycor + bottom-board-size)+ 1) ; Place them randomly but above the bottom board
   ]
-  create-drones 100 [  ; Creates 50 sheep
+  create-drones 1 [ ;;will change
     set color green
-     set shape "bug"
-     set size 3
+    set shape "bug"
+    set size 3
     set age 0
+    set health 100
     setxy random-pxcor (min-pycor + bottom-board-size) + random (max-pycor - (min-pycor + bottom-board-size)+ 1)
   ]
 
-  create-queens 1 [
-    set color white
-    set shape "bug"
-    set size 6
-    setxy random-pxcor (min-pycor + bottom-board-size) + random ((min-pycor + bottom-board-size + deep-super-size) - (min-pycor + bottom-board-size)+ 1) ; Place randomly in deep super
-
-  ]
-
-end
-
-to move
-
-  if breed = workers[
-    move-forward
-    wiggle
-  ]
 end
 
 
@@ -197,6 +206,25 @@ to move-forward
   ]
 end
 
+
+to feed-larvae
+  if [has-brood = true and growth-stage < 90] of patch-here[
+    ;;We add some logic inside of here instead adding more conditions to the above
+    if ([food-level] of patch-here < 8)[
+      ifelse(food > (8 - ([food-level] of patch-here)))[
+        set food food - (8 - ([food-level] of patch-here))
+        ask patch-here [set food-level 8]
+      ][
+        let temp-food food
+        ask patch-here [set food-level food-level + temp-food]
+        set food 0
+    ]
+
+  ]
+  ]
+
+end
+
 to move-queen
   ifelse patch-ahead 1 != nobody [
   ifelse not ([pcolor] of patch-ahead 1 = red or [pcolor] of patch-ahead 1 = magenta)[
@@ -214,21 +242,12 @@ to move-queen
 end
 
 
-to lay-egg
-
-  ask patch-here [
-   if(growth-stage = 0)[
-     set growth-stage 1
-     set larvae true
-  ] ]
-
-end
 @#$#@#$#@
 GRAPHICS-WINDOW
 200
 10
 1412
-863
+639
 -1
 -1
 4.0
@@ -243,8 +262,8 @@ GRAPHICS-WINDOW
 1
 -150
 150
--105
-105
+-77
+77
 1
 1
 1
@@ -356,7 +375,7 @@ num-workers
 num-workers
 1
 1000
-517.0
+663.0
 1
 1
 NIL
@@ -371,7 +390,7 @@ bottom-board-size
 bottom-board-size
 1
 30
-30.0
+21.0
 1
 1
 NIL
@@ -386,32 +405,17 @@ deep-super-size
 deep-super-size
 0
 100
-83.0
+35.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-15
-620
-188
-653
-n-shallow-super
-n-shallow-super
-1
-4
-4.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-16
-668
-189
-701
+12
+621
+185
+654
 shallow-super-size
 shallow-super-size
 0
@@ -422,106 +426,51 @@ shallow-super-size
 NIL
 HORIZONTAL
 
+SLIDER
+14
+665
+186
+698
+egg-time
+egg-time
+1
+250
+15.0
+1
+1
+NIL
+HORIZONTAL
+
+PLOT
+1526
+178
+1726
+328
+Worker bee count
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count turtles with [breed = workers]"
+
+MONITOR
+1468
+390
+1683
+435
+NIL
+count turtles with [breed = workers]
+17
+1
+11
+
 @#$#@#$#@
-## ACKNOWLEDGMENT
-
-This model is from Chapter Three of the book "Introduction to Agent-Based Modeling: Modeling Natural, Social and Engineered Complex Systems with NetLogo", by Uri Wilensky & William Rand.
-
-* Wilensky, U. & Rand, W. (2015). Introduction to Agent-Based Modeling: Modeling Natural, Social and Engineered Complex Systems with NetLogo. Cambridge, MA. MIT Press.
-
-This model is in the IABM Textbook folder of the NetLogo Models Library. The model, as well as any updates to the model, can also be found on the textbook website: http://www.intro-to-abm.com/.
-
-## WHAT IS IT?
-
-This model simulates the spread of a fire through a forest.  It shows that the fire's chance of reaching the right edge of the forest depends critically on the density of trees. This is an example of a common feature of complex systems, the presence of a non-linear threshold or critical parameter.
-
-This is a simplified version of the  Fire model in the Earth Science section of the NetLogo Models library.
-
-## HOW IT WORKS
-
-The fire starts on the left edge of the forest, and spreads to neighboring trees. The fire spreads in four directions: north, east, south, and west.
-
-The model assumes there is no wind.  So, the fire must have trees along its path in order to advance.  That is, the fire cannot skip over an unwooded area (patch), so such a patch blocks the fire's motion in that direction.
-
-## HOW TO USE IT
-
-Click the SETUP button to set up the trees (green) and fire (red on the left-hand side).
-
-Click the GO button to start the simulation.
-
-The DENSITY slider controls the density of trees in the forest. (Note: Changes in the DENSITY slider do not take effect until the next SETUP.)
-
-## THINGS TO NOTICE
-
-When you run the model, how much of the forest burns. If you run it again with the same settings, do the same trees burn? How similar is the burn from run to run?
-
-Each turtle that represents a piece of the fire is born and then dies without ever moving.  If the fire is made of turtles but no turtles are moving, what does it mean to say that the fire moves?  This is an example of different levels in a system: at the level of the individual turtles, there is no motion, but at the level of the turtles collectively over time, the fire moves.
-
-## THINGS TO TRY
-
-Set the density of trees to 55%. At this setting, there is virtually no chance that the fire will reach the right edge of the forest. Set the density of trees to 70%. At this setting, it is almost certain that the fire will reach the right edge. There is a sharp transition around 59% density. At 59% density, the fire has a 50/50 chance of reaching the right edge.
-
-Try setting up and running a BehaviorSpace experiment (see Tools menu) to analyze the percent burned at different tree density levels. Plot the burn-percentage against the density. What kind of curve do you get?
-
-Try changing the size of the lattice (`max-pxcor` and `max-pycor` in the Model Settings). Does it change the burn behavior of the fire?
-
-## EXTENDING THE MODEL
-
-What if the fire could spread in eight directions (including diagonals)? To do that, use `neighbors` instead of `neighbors4`. How would that change the fire's chances of reaching the right edge? In this model, what "critical density" of trees is needed for the fire to propagate?
-
-Add wind to the model so that the fire can "jump" greater distances in certain directions.
-
-Add the ability to plant trees where you want them. What configurations of trees allow the fire to cross the forest? Which don't? Why is over 59% density likely to result in a tree configuration that works? Why does the likelihood of such a configuration increase so rapidly at the 59% density?
-
-## NETLOGO FEATURES
-
-Unburned trees are represented by green patches; burning trees are represented by turtles.  Two breeds of turtles are used, "fires" and "embers".  When a tree catches fire, a new fire turtle is created; a fire turns into an ember on the next turn.  Notice how the program gradually darkens the color of embers to achieve the visual effect of burning out.
-
-The `neighbors4` primitive is used to spread the fire.
-
-You could also write the model without turtles by just having the patches spread the fire, and doing it that way makes the code a little simpler.   Written that way, the model would run much slower, since all of the patches would always be active.  By using turtles, it's much easier to restrict the model's activity to just the area around the leading edge of the fire.
-
-See the "CA 1D Rule 30" and "CA 1D Rule 30 Turtle" for an example of a model written both with and without turtles.
-
-## RELATED MODELS
-
-Fire, Percolation, Rumor Mill
-
-## CREDITS AND REFERENCES
-
-This model is a simplified version of:
-
-* Wilensky, U. (1997).  NetLogo Fire model.  http://ccl.northwestern.edu/netlogo/models/Fire.  Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
-
-## HOW TO CITE
-
-This model is part of the textbook, “Introduction to Agent-Based Modeling: Modeling Natural, Social and Engineered Complex Systems with NetLogo.”
-
-If you mention this model or the NetLogo software in a publication, we ask that you include the citations below.
-
-For the model itself:
-
-* Wilensky, U. (2006).  NetLogo Fire Simple model.  http://ccl.northwestern.edu/netlogo/models/FireSimple.  Center for Connected Learning and Computer-Based Modeling, Northwestern Institute on Complex Systems, Northwestern University, Evanston, IL.
-
-Please cite the NetLogo software as:
-
-* Wilensky, U. (1999). NetLogo. http://ccl.northwestern.edu/netlogo/. Center for Connected Learning and Computer-Based Modeling, Northwestern University, Evanston, IL.
-
-Please cite the textbook as:
-
-* Wilensky, U. & Rand, W. (2015). Introduction to Agent-Based Modeling: Modeling Natural, Social and Engineered Complex Systems with NetLogo. Cambridge, MA. MIT Press.
-
-## COPYRIGHT AND LICENSE
-
-Copyright 2006 Uri Wilensky.
-
-![CC BY-NC-SA 3.0](http://ccl.northwestern.edu/images/creativecommons/byncsa.png)
-
-This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 3.0 License.  To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/3.0/ or send a letter to Creative Commons, 559 Nathan Abbott Way, Stanford, California 94305, USA.
-
-Commercial licenses are also available. To inquire about commercial licenses, please contact Uri Wilensky at uri@northwestern.edu.
-
-<!-- 2006 -->
 @#$#@#$#@
 default
 true
