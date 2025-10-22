@@ -142,7 +142,7 @@ to brood-development
           set size 3
           set age 0
           ifelse(temp-mite-presence = true)[
-            set health random 90 ;;needs something bett
+            ;set health random 60 ;;needs something bett
             set phoretic-mite-count 4 ;;tbd later
           ][
            set health 100
