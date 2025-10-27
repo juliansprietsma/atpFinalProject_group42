@@ -8,6 +8,7 @@ globals [
   forage-threshold
   total-honey
   hunger-threshold
+  feeding-cooldown
 ]
 
 breed [workers a-worker]
@@ -20,6 +21,7 @@ food ;;food level
 designation ;;hive bee or forager
 health ;; health of the bee
 foraging;;
+activity
 ]
 drones-own [
 age
@@ -37,16 +39,18 @@ patches-own [
  food-level
  larvae-health
  larvae-type
+ cooldown
 ]
 
 to set-globals ;;inspired by lecture code
   set spacer-size 4
-  set strive-food-level 8
+  set strive-food-level 80
   set sight-radius 4
-  set honey-max 20
-  set storage-threshold 15
-  set forage-threshold 50
-  set hunger-threshold 4
+  set honey-max 200
+  set storage-threshold 150
+  set forage-threshold 200
+  set hunger-threshold 70
+  set feeding-cooldown 50
 end
 
 to update-globals ;;code from simple seggregation model 2006 Uri Wilensky.
@@ -72,9 +76,19 @@ to go
   ask turtles [
    set age age + 1
 
+
+
   ]
 
    ask turtles with [breed = workers][
+   ifelse(food <= 0)[
+     die
+    ][
+     if random 4 = 1 [
+       set food food - 1
+      ]
+
+    ]
 
    if phoretic-mite-count > 0 [
      mite-jump
@@ -82,9 +96,14 @@ to go
     ]
 
    if(designation = "hiver")[
+
    withdraw-honey
    feed-larvae
-   move-queen
+
+   ifelse random 10 = 1[
+    wiggle
+      ][
+        move-forward]
     ]
    if(designation = "forager")[
    deposit-honey
@@ -99,12 +118,21 @@ to go
          set foraging false
          setxy random-pxcor (min-pycor + bottom-board-size) + random (max-pycor - (min-pycor + bottom-board-size)+ 1)
         ]
-        move-queen
+        move-forward
       ]
     ]
+   if (age > 1000) [
+     set designation "forager"
+    ]
 
+   if(age > 4000 * (health / 100))[
+   die
+  ]
+  ]
 
-   if(age > 2000)[
+  ask turtles with [breed = drones][
+   move-forward
+       if(age > 2000 * (health / 100))[
    die
   ]
   ]
@@ -116,17 +144,21 @@ end
 
 to brood-development
  ask patches with [has-brood = true][
+
+    if(cooldown > 0)[
+     set cooldown cooldown - 1
+    ]
+
     set pcolor scale-color yellow growth-stage 201 1
     ;;This code is incomplete, growth needs to depend on worker involement
     set growth-stage growth-stage + 1
     if(growth-stage < 90)[ ;;sort of random value right now, but this represents when the cell is capped and the brood grows on its own
-      if ticks mod 10 = 0[;;every 10 ticks otherwise the numbers get annoyingly big for everything
         if food-level > 0[set food-level food-level - 1 ]
-      ]
        if food-level <= 0[ ;;The larvae dies if there is no more food
         set pcolor yellow - 0.5
         set growth-stage 0
         set has-brood false
+        set mite-presence false
        ]
     ]
 
@@ -141,18 +173,15 @@ to brood-development
           set shape "bug"
           set size 3
           set age 0
+          set food 100
           ifelse(temp-mite-presence = true)[
-            set health random 90 ;;needs something bett
-            set phoretic-mite-count 4 ;;tbd later
+            set health random 60 ;;needs something bett
+            set phoretic-mite-count 2 ;;tbd later
           ][
            set health 100
           ]
-          ifelse(random 3 = 1)
-            [ ;;may need to add global variable to control forager %
-            set designation "forager"
-        ][
-           set designation "hiver"
-          ]
+          set designation "hiver"
+
 
       ] ]
       if larvae-type = "drone"[
@@ -163,7 +192,7 @@ to brood-development
         set age 0
         ifelse(temp-mite-presence = true)[
             set health random 60 ;;needs something bett
-            set phoretic-mite-count 4 ;;tbd later
+            set phoretic-mite-count 3 ;;tbd later
           ][
             set health 100
           ]
@@ -175,10 +204,10 @@ to brood-development
   if ticks mod egg-time = 0 [
 
     if any? patches with [brood-cell = true and has-brood = false][
-    ask n-of 1 patches with [brood-cell = true and has-brood = false] [
+    ask n-of 3 patches with [brood-cell = true and has-brood = false] [
      set has-brood true
      set growth-stage 1
-     set food-level 5
+     set food-level 50
      set larvae-health 100
      ifelse random 20 = 1[ ;;may need to add global variable to control drone %
      set larvae-type "drone"
@@ -206,15 +235,10 @@ to generate-beehive
  ask patches [
     if pycor > min-pycor + bottom-board-size [
       set has-brood false
-      ifelse pycor < (min-pycor + bottom-board-size + deep-super-size)[
         set brood-cell true
         set honey-cell  false
         set pcolor yellow - 0.5
-      ][
-        set pcolor yellow
         set honey-cell true
-        set brood-cell false
-      ]
 
     ]
     if (pycor = (min-pycor + bottom-board-size))[
@@ -228,7 +252,7 @@ to generate-beehive
     set shape "bug"
     set size 3
     set age random 1800
-    set food 20
+    set food 400
     set health 100
 
     if(setup-mites = true and random 10 = 1)[
@@ -260,16 +284,18 @@ to wiggle
 end
 
 to move-forward
-  ifelse patch-ahead 1 != nobody [
+  ifelse patch-ahead 1 != nobody [ ;;To use the patch ahead function we need to deal with edge of world.
   ifelse not ([pcolor] of patch-ahead 1 = red)[
-    forward 1 * (health / 100)
-  ][
+        forward 1 * (health / 100)][
    wiggle
   ]
   ][
    wiggle
   ]
 end
+
+
+
 
 
 to move-forage
@@ -322,7 +348,7 @@ let relevant-patches patches in-radius sight-radius with [honey-cell = true and 
     let temp-food food
     ask max-n-of 1 relevant-patches [honey-level][
 
-    ifelse(honey-level > 0.7 * honey-max)[ ;;Arbitrary percentage, global variable, or too trivial?
+    ifelse(honey-level > 0.5 * honey-max)[ ;;Arbitrary percentage, global variable, or too trivial?
     ifelse (honey-level > (storage-threshold - temp-food)) [
 
       set honey-level (honey-level - (storage-threshold - temp-food))
@@ -358,28 +384,51 @@ let relevant-patches patches in-radius sight-radius with [honey-cell = true and 
 end
 
 to mite-jump ;;behavior for mites jumping from bees to brood
-  let drone-patches patches in-radius 2 with [has-brood = true and 10 > growth-stage and larvae-type = "drone"]
-  let worker-patches patches in-radius 2 with [has-brood = true and 10 > growth-stage and larvae-type = "worker"]
+ ;; let drone-patches patches in-radius 2 with [has-brood = true and 10 > growth-stage and larvae-type = "drone"]
+  ;;let worker-patches patches in-radius 2 with [has-brood = true and 10 > growth-stage and larvae-type = "worker"]
   ;;imperfect probabilities but they are fine enough like this
+  let brood-patches patches in-radius 5 with [has-brood = true and 50 > growth-stage and mite-presence != true ]
+  let free-bees turtles in-radius 5 with [phoretic-mite-count = 0 and age < 200]
 
 
-  ifelse random 2 = 1 [
-    if any? drone-patches[
-    set phoretic-mite-count phoretic-mite-count - 1
-     ask n-of 1 drone-patches[
-        set mite-presence true
-      ]
-    ]
-  ][
-   if random 3 = 1[
-    if any? worker-patches[
-    set phoretic-mite-count phoretic-mite-count - 1
-     ask n-of 1 worker-patches[
-        set mite-presence true
-      ]
-    ]
+  if any? brood-patches[
+   set phoretic-mite-count phoretic-mite-count - 1
+   ask one-of brood-patches[
+
+     ;;Drone preference?
+     set mite-presence true
     ]
   ]
+
+  if phoretic-mite-count > 0[
+  if any? free-bees[
+   set phoretic-mite-count phoretic-mite-count - 1
+   ask one-of free-bees[
+        set phoretic-mite-count 1
+    ]
+  ]
+  ]
+
+
+
+
+ ; ifelse random 2 = 1 [
+  ;  if any? drone-patches[
+   ; set phoretic-mite-count phoretic-mite-count - 1
+    ; ask n-of 1 drone-patches[
+    ;    set mite-presence true
+    ;  ]
+    ;]
+ ; ][
+  ; if random 2 = 1[
+   ; if any? worker-patches[
+    ;set phoretic-mite-count phoretic-mite-count - 1
+    ; ask n-of 1 worker-patches[
+     ;   set mite-presence true
+      ;]
+  ;  ]
+  ;  ]
+ ; ]
 
 
 end
@@ -389,10 +438,17 @@ to forage
    ; set heading 180
    ; move-forage
   ;][
- if(random (10 + (100 - health)) = 1)[ ;;foraging is less successful if the bee has bad health
+
+  ifelse winter = false [
+ if(random ((100 - health)) = 1)[ ;;foraging is less successful if the bee has bad health
      set food food + 1
      ;;set health health - 1 ;;foraging is dangerous
-    ]
+  ]][
+     if(random (4 + (100 - health)) = 1)[ ;;foraging is less successful if the bee has bad health
+     set food food + 1
+     ;;set health health - 1 ;;foraging is dangerous
+  ]]
+
 
   ;]
 
@@ -400,20 +456,31 @@ to forage
 
 end
 
+to social-heading ;;adjust heading to be more social and care for brood
+  let brood-patches patches in-radius sight-radius with [has-brood = true and 90 > growth-stage and distance myself > 1]
+  ifelse (random 4 = 1)[ ;;adjust heading every once in while
+  if any? brood-patches[
+      set heading (towards (min-one-of brood-patches [distance myself]))
+  ]
+  ][
+    wiggle
 
+  ]
+
+end
 
 to feed-larvae
 
-  let relevant-patches patches in-radius sight-radius with [has-brood = true and growth-stage < 90 and (food-level < strive-food-level)]
+  let relevant-patches patches in-radius sight-radius with [has-brood = true and growth-stage < 90 and (food-level < strive-food-level) and cooldown = 0]
 
   if any? relevant-patches[
 
     let temp-food food
     ask min-n-of 1 relevant-patches [food-level][
-
-      ifelse(temp-food > (8 - food-level))[
-        set temp-food temp-food - (8 - food-level)
-        set food-level 8
+  set cooldown feeding-cooldown
+      ifelse(temp-food > (strive-food-level - food-level))[
+        set temp-food temp-food - (strive-food-level - food-level)
+        set food-level strive-food-level
       ][
 
         set food-level food-level + temp-food
@@ -421,34 +488,18 @@ to feed-larvae
 
   ]
   ]
+
   set food temp-food
   ]
 
 end
-
-to move-queen
-  ifelse patch-ahead 1 != nobody [
-  ifelse not ([pcolor] of patch-ahead 1 = red or [pcolor] of patch-ahead 1 = magenta)[
-    ifelse random 5 = 1[
-       wiggle
-      ][
-        forward 1]
-
-  ][
-   wiggle
-  ]
-  ][
-   wiggle
-  ]
-end
-
 
 @#$#@#$#@
 GRAPHICS-WINDOW
 200
 10
 1412
-439
+615
 -1
 -1
 4.0
@@ -463,10 +514,10 @@ GRAPHICS-WINDOW
 1
 -150
 150
--52
-52
-1
-1
+-74
+74
+0
+0
 1
 ticks
 30.0
@@ -514,7 +565,7 @@ num-workers
 num-workers
 1
 3000
-1586.0
+2179.0
 1
 1
 NIL
@@ -544,7 +595,7 @@ deep-super-size
 deep-super-size
 0
 100
-45.0
+89.0
 1
 1
 NIL
@@ -574,7 +625,7 @@ egg-time
 egg-time
 1
 250
-3.0
+6.0
 1
 1
 NIL
@@ -707,6 +758,35 @@ SWITCH
 setup-mites
 setup-mites
 1
+1
+-1000
+
+PLOT
+1228
+465
+1428
+615
+brood
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count patches with [has-brood = true]"
+
+SWITCH
+20
+222
+123
+255
+winter
+winter
+0
 1
 -1000
 
