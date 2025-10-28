@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<model version="NetLogo 7.0.0" snapToGrid="false">
+<model version="NetLogo 7.0.1" snapToGrid="false">
   <code><![CDATA[globals [
   honey-level-global
   num-shallow-supers
@@ -86,9 +86,6 @@ to go
 
   ask turtles [
    set age age + 1
-
-
-
   ]
 
    ask turtles with [breed = workers][
@@ -129,6 +126,10 @@ to go
    die
     ]
   ]
+  
+  if ticks mod 4 = 0 [
+   drone-brood-removal 
+  ]
 
   ask turtles with [breed = drones][
    move-forward
@@ -141,6 +142,26 @@ to go
   tick ;; advance the clock by one “tick”
 end
 
+
+to drone-brood-removal
+  
+  let miteCount 0
+  let totalBrood 0
+  let removalThreshold 10 ;; The percentage of brood that needs to have mites for the brood to be removed
+  ask patches with [has-brood = true] [
+    if larvae-type = "drone" [
+      if mite-presence = true [ set miteCount miteCount + 1 ]
+    ]
+  ]
+  
+  if (totalBrood != 0 and (miteCount / totalBrood) * 100 > removalThreshold) [ 
+    ask patches with [has-brood = true] [
+       if larvae-type = "drone" [
+        set has-brood false
+       ]
+     ]
+  ]
+end
 
 to brood-development
  ask patches with [has-brood = true][
@@ -239,7 +260,6 @@ to generate-beehive
         set honey-cell  false
         set pcolor yellow - 0.5
         set honey-cell true
-
     ]
     if (pycor = (min-pycor + bottom-board-size))[
       set pcolor red
@@ -260,7 +280,7 @@ to generate-beehive
     ]
     ifelse random 3 = 1[ ;;may need to add global variable to control forager %
       set designation "forager"
-  ][
+    ][
      set designation "hiver"
     ]
 
@@ -531,7 +551,7 @@ end]]></code>
         <update>plot count patches with [mite-presence = true]</update>
       </pen>
     </plot>
-    <switch x="32" y="121" height="33" on="false" variable="setup-mites" display="setup-mites" width="120" sizeVersion="0"></switch>
+    <switch x="32" y="121" height="33" on="true" variable="setup-mites" display="setup-mites" width="120" sizeVersion="0"></switch>
     <plot x="1228" autoPlotX="true" yMax="10.0" autoPlotY="true" y="465" xMin="0.0" height="150" legend="false" xMax="10.0" yMin="0.0" display="brood" width="200" sizeVersion="0">
       <setup></setup>
       <update></update>

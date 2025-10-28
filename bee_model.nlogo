@@ -341,7 +341,7 @@ to withdraw-honey
 
 if storage-threshold > food[
 
-let relevant-patches patches in-radius sight-radius with [honey-cell = true and honey-level > 0]
+  let relevant-patches patches in-radius sight-radius with [honey-cell = true and honey-level > 0]
 
   if any? relevant-patches[
 
@@ -493,7 +493,6 @@ to feed-larvae
   ]
 
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 200
