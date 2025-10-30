@@ -127,8 +127,12 @@ to go
     ]
   ]
   
-  if ticks mod 4 = 0 [
+  if (remove-drone-brood) and (ticks mod 4 = 0) [
    drone-brood-removal 
+  ]
+  
+  if (remove-general-brood) and (ticks mod 4 = 0) [
+    general-brood-removal
   ]
 
   ask turtles with [breed = drones][
@@ -147,14 +151,13 @@ to drone-brood-removal
   
   let miteCount 0
   let totalBrood 0
-  let removalThreshold 10 ;; The percentage of brood that needs to have mites for the brood to be removed
   ask patches with [has-brood = true] [
     if larvae-type = "drone" [
       if mite-presence = true [ set miteCount miteCount + 1 ]
     ]
   ]
   
-  if (totalBrood != 0 and (miteCount / totalBrood) * 100 > removalThreshold) [ 
+  if (totalBrood != 0 and (miteCount / totalBrood) * 100 > drone-brood-removal-threshold) [ 
     ask patches with [has-brood = true] [
        if larvae-type = "drone" [
         set has-brood false
@@ -162,6 +165,23 @@ to drone-brood-removal
      ]
   ]
 end
+
+
+to general-brood-removal
+  let miteCount 0
+  let totalBrood 0
+  ask patches with [has-brood = true] [
+    if mite-presence = true [ set miteCount miteCount + 1 ]
+  ]
+  
+  if (totalBrood != 0 and (miteCount / totalBrood) * 100 > general-brood-removal-threshold) [ 
+    ask patches with [has-brood = true] [
+      set has-brood false
+     ]
+  ]
+end
+
+
 
 to brood-development
  ask patches with [has-brood = true][
@@ -573,6 +593,10 @@ end]]></code>
       </pen>
     </plot>
     <monitor x="1895" precision="17" y="298" height="60" fontSize="11" width="100">count turtles with [breed = workers and designation = "forager"]</monitor>
+    <switch x="259" y="643" height="40" on="false" variable="remove-drone-brood" width="128" display="remove-drone-brood"></switch>
+    <slider x="259" step="1" y="692" max="100" width="250" display="drone-brood-removal-threshold" height="50" min="0" direction="Horizontal" default="50.0" variable="drone-brood-removal-threshold"></slider>
+    <switch x="567" y="639" height="40" on="false" variable="remove-general-brood" width="156" display="remove-general-brood"></switch>
+    <slider x="566" step="1" y="695" max="100" width="250" display="general-brood-removal-threshold" height="50" min="0" direction="Horizontal" default="50.0" variable="general-brood-removal-threshold"></slider>
   </widgets>
   <info></info>
   <turtleShapes>
